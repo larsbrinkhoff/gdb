@@ -1664,6 +1664,35 @@ symbol_file_command (char *args, int from_tty)
     }
 }
 
+void
+add_symbol_command (char *args, int from_tty)
+{
+  if (args == NULL)
+    error (_("add-symbol takes a symbol name and an address"));
+
+  const char *name = args;
+  char *val = strchr (args, ' ');
+  if (val == NULL)
+    error (_("add-symbol takes a symbol name and an address"));
+
+  *val = 0;
+  CORE_ADDR addr = parse_and_eval_address (val + 1);
+
+  struct objfile *objfile = current_program_space->objfiles;
+  if (objfile == NULL)
+    error (_("a file must be loaded for add-symbol to work"));
+
+  objfile->per_bfd->minsyms_read = 0;
+  minimal_symbol_reader reader (objfile);
+  reader.record (name, addr, mst_text); // unknown, text, data, bss, abs
+  reader.install ();
+  objfile->per_bfd->minsyms_read = 1;
+
+  /* Getting new symbols may change our opinion about
+     what is frameless.  */
+  reinit_frame_cache ();
+}
+
 /* Set the initial language.
 
    FIXME: A better solution would be to record the language in the
@@ -3863,6 +3892,9 @@ Load symbol table from executable file FILE.\n\
 The `file' command can also load symbol tables, as well as setting the file\n\
 to execute."), &cmdlist);
   set_cmd_completer (c, filename_completer);
+
+  c = add_cmd ("add-symbol", class_files, add_symbol_command, _("\
+Set a new symbol."), &cmdlist);
 
   c = add_cmd ("add-symbol-file", class_files, add_symbol_file_command, _("\
 Load symbols from FILE, assuming FILE has been dynamically loaded.\n\
